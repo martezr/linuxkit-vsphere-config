@@ -1,0 +1,14 @@
+image: public.ecr.aws/i4r5n0t9/linuxkit-vsphere-config
+network: true
+config:
+  binds:
+    - /dev:/dev
+    - /var:/var
+    - /run:/run
+    - /sys:/sys
+    - /etc/resolv.conf:/etc/resolv.conf
+readonly: true
+capabilities:
+  - CAP_SYS_ADMIN
+  - CAP_NET_ADMIN
+  - CAP_NET_BIND_SERVICE
