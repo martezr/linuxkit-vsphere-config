@@ -3,8 +3,12 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
+	"os/signal"
+	"strings"
 	"time"
 
+	"github.com/martezr/linuxkit-vsphere-config/vip"
 	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netlink/nl"
 
@@ -14,7 +18,6 @@ import (
 
 func main() {
 	log.Println("Starting up config.")
-	time.Sleep(15 * time.Second)
 
 	// Evaluate whether the workload is running on vSphere
 	log.Println("Checking if VM or not.")
@@ -52,5 +55,53 @@ func main() {
 		}
 	}
 	netlink.AddrReplace(eth0, addr)
-	time.Sleep(600 * time.Second)
+	err = netlink.LinkSetUp(eth0)
+	if err != nil {
+		log.Fatalf("error bringing up the link: %v", err)
+	}
+	log.Println("Brought up NIC.")
+	time.Sleep(20 * time.Second)
+	createVIP()
+}
+
+func createVIP() {
+
+	id := ""
+	bind := "0.0.0.0"
+	peersList := ""
+	networkInterface := "eth0"
+	virtualIP := "10.0.0.3"
+
+	netlinkNetworkConfigurator, error := vip.NewNetlinkNetworkConfigurator(virtualIP, networkInterface)
+	if error != nil {
+		os.Exit(-1)
+	}
+
+	peers := vip.Peers{}
+
+	if len(peersList) > 0 {
+		for _, peer := range strings.Split(peersList, ",") {
+			peerTokens := strings.Split(peer, "=")
+
+			if len(peerTokens) != 2 {
+				os.Exit(-1)
+			}
+
+			peers[peerTokens[0]] = peerTokens[1]
+		}
+	}
+
+	logger := vip.Logger{}
+
+	vipManager := vip.NewVIPManager(id, bind, peers, logger, netlinkNetworkConfigurator)
+	if error := vipManager.Start(); error != nil {
+		os.Exit(-1)
+	}
+
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, os.Interrupt)
+
+	<-signalChan
+
+	vipManager.Stop()
 }
